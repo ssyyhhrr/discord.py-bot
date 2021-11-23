@@ -31,7 +31,7 @@ async def ping(ctx):
 @bot.command()
 async def coins(ctx):
     getConfig()
-    await ctx.reply(f"You have {str(data[str(ctx.message.author.id)]['coins'])} coins.")
+    await ctx.reply(f"You have **{str(data[str(ctx.message.author.id)]['coins'])}** coins.")
 
 @bot.command()
 async def roulette(ctx, bet = None, colour = None):
@@ -52,7 +52,6 @@ async def roulette(ctx, bet = None, colour = None):
     if data[str(ctx.message.author.id)]["coins"] < betAmount:
         await ctx.send("You do not have sufficient coins.")
         return
-    
     select = random.randint(0, 1)
     if didWin(colour, select):
         data[str(ctx.message.author.id)]["coins"] += betAmount
@@ -60,6 +59,39 @@ async def roulette(ctx, bet = None, colour = None):
         data[str(ctx.message.author.id)]["coins"] -= betAmount
     setConfig()
     await ctx.send(f"{'🔴' if select == 0 else '⚫'} The ball landed on {'red' if select == 0 else 'black'}. You {'won' if (didWin(colour, select)) else 'lost'} **{betAmount * (2 if (didWin(colour, select)) else 1)}** coins{'!' if (didWin(colour, select)) else '.'}")
+
+@bot.command()
+async def quiz(ctx):
+    getConfig()
+    with open("questions.json", "r") as f:
+        questionsArr = json.load(f)
+        question = random.choice(questionsArr)
+    EMBED = discord.Embed(title="Quiz Question", description=question[0], color=0xffa500)
+    EMBED.add_field(name="Answers", value="**1.** True\n**2.** False")
+    message = await ctx.reply(embed=EMBED)
+    await message.add_reaction("1️⃣")
+    await message.add_reaction("2️⃣")
+    def check(reaction, user):
+        return user == ctx.message.author and (str(reaction.emoji) == "1️⃣" or str(reaction.emoji) == "2️⃣")
+    try:
+        reaction, user = await bot.wait_for("reaction_add", timeout=60.0, check=check)
+    except asyncio.TimeoutError:
+        EMBED = discord.Embed(title="Quiz Question", description=question[0], color=0x808080)
+        EMBED.add_field(name="Answers", value="**1.** True\n**2.** False")
+        await message.edit(embed=EMBED)
+    else:
+        if (str(reaction.emoji) == "1️⃣" and question[1] == "true") or (str(reaction.emoji) == "2️⃣" and question[1] == "false"):
+            EMBED = discord.Embed(title="Quiz Question", description=question[0], color=0x00ff00)
+            EMBED.add_field(name="Answers", value="**1.** True\n**2.** False")
+            await message.edit(embed=EMBED)
+            data[str(ctx.message.author.id)]["coins"] += 100
+            setConfig()
+            await ctx.send(f"{ctx.message.author.mention}, you are correct! +**100** coins!")
+        else:
+            EMBED = discord.Embed(title="Quiz Question", description=question[0], color=0xff0000)
+            EMBED.add_field(name="Answers", value="**1.** True\n**2.** False")
+            await message.edit(embed=EMBED)
+            await ctx.send(f"{ctx.message.author.mention}, you are incorrect :(")
 
 def getConfig():
     global data
