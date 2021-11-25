@@ -2,6 +2,8 @@ import os
 import json
 import random
 import discord
+import time
+import asyncio
 from dotenv import load_dotenv
 from discord.ext import commands
 
@@ -13,6 +15,9 @@ INTENTS.members = True
 
 bot = commands.AutoShardedBot(command_prefix=commands.when_mentioned_or("!"), owner_id=518124039714242562, intents=INTENTS)
 
+jackpotEmbed = None
+participants = {}
+
 @bot.event
 async def on_ready():
     print(f"{bot.user} has connected to Discord!")
@@ -21,6 +26,7 @@ async def on_ready():
 async def on_member_join(member):
     if not member.id in data:
         data[member.id] = {'coins': 0}
+        data[member.id] = {'daily': 0}
         with open("users.json", "w") as f:
             json.dump(data, f, indent=4)
 
@@ -92,6 +98,71 @@ async def quiz(ctx):
             EMBED.add_field(name="Answers", value="**1.** True\n**2.** False")
             await message.edit(embed=EMBED)
             await ctx.send(f"{ctx.message.author.mention}, you are incorrect :(")
+
+@bot.command()
+async def daily(ctx):
+    getConfig()
+    if int(time.time()) - data[str(ctx.message.author.id)]["daily"] > 86400:
+        data[str(ctx.message.author.id)]["coins"] += 1000
+        data[str(ctx.message.author.id)]["daily"] = time.time()
+        await ctx.send(f"{ctx.message.author.mention}, you have claimed your daily **1000** coins!")
+        setConfig()
+        return
+    else:
+        await ctx.reply(f"24 hours has not passed since your last claim!")
+        return
+
+@bot.command()
+async def jackpot(ctx, bet = None):
+    global jackpotEmbed
+    global participants
+    getConfig()
+    if not bet:
+        await ctx.send("Invalid syntax. `!jackpot (bet)`")
+        return
+    try:
+        betAmount = int(bet)
+        if betAmount < 1:
+            raise Exception()
+    except:
+        await ctx.send("Enter a valid bet amount.")
+        return
+    if data[str(ctx.message.author.id)]["coins"] < betAmount:
+        await ctx.send("You do not have sufficient coins.")
+        return
+    data[str(ctx.message.author.id)]["coins"] -= betAmount
+    setConfig()
+    if jackpotEmbed == None:
+        participants = {}
+        EMBED = discord.Embed(title="Jackpot", description="Bets will close in **30** seconds.", color=0xffd700)
+        EMBED.add_field(name="Jackpot Participants", value=ctx.message.author.mention)
+        jackpotEmbed = await ctx.send(embed=EMBED)
+        participants[ctx.message.author.mention] = betAmount
+        await drawWinner()
+    else:
+        participants[ctx.message.author.mention] = betAmount
+        EMBED = discord.Embed(title="Jackpot", description="Bets will close in **30** seconds.", color=0xffd700)
+        EMBED.add_field(name="Jackpot Participants", value='\n'.join(participants))
+        await jackpotEmbed.edit(embed=EMBED)
+        await ctx.message.add_reaction("✅")
+
+async def drawWinner():
+    global jackpotEmbed
+    global participants
+    await asyncio.sleep(30)
+    ticket = random.randint(1, sum(list(participants.values())))
+    total = 0
+    for i in range(len(list(participants.keys()))):
+        total += list(participants.values())[i]
+        if ticket < total:
+            winner = list(participants.keys())[i]
+            break
+    data[str(winner[2:20])]["coins"] += sum(list(participants.values()))
+    setConfig()
+    EMBED = discord.Embed(title="Jackpot", description=f"The winner is {winner}\nThey won **{sum(list(participants.values()))}** coins!", color=0x808080)
+    EMBED.add_field(name="Jackpot Participants", value='\n'.join(participants))
+    await jackpotEmbed.edit(embed=EMBED)
+    jackpotEmbed = None
 
 def getConfig():
     global data
