@@ -5,7 +5,7 @@ import discord
 import time
 import asyncio
 from dotenv import load_dotenv
-from discord.ext import commands
+from discord.ext import tasks, commands
 
 load_dotenv()
 TOKEN = os.getenv("DISCORD_TOKEN")
@@ -18,9 +18,31 @@ bot = commands.AutoShardedBot(command_prefix=commands.when_mentioned_or("!"), ow
 jackpotEmbed = None
 participants = {}
 
+pets = {}
+
+class Pet():
+    def __init__(self, name, animal):
+        self.name = name
+        self.animal = animal
+        self.age = 0
+        self.health = 100
+        self.food = 100
+    
+    def feedPet(self):
+        self.food = min(100, self.food + 10)
+
+    async def info(self, ctx):
+        EMBED = discord.Embed(title=self.name, description=self.animal, color=0xffff00)
+        EMBED.add_field(name="Age", value=self.age)
+        EMBED.add_field(name="Health", value=self.health)
+        EMBED.add_field(name="Food", value=self.food)
+        await ctx.send(embed=EMBED)
+
 @bot.event
 async def on_ready():
     print(f"{bot.user} has connected to Discord!")
+    depleteFood.start()
+    increaseAge.start()
 
 @bot.event
 async def on_member_join(member):
@@ -145,6 +167,63 @@ async def jackpot(ctx, bet = None):
         EMBED.add_field(name="Jackpot Participants", value='\n'.join(participants))
         await jackpotEmbed.edit(embed=EMBED)
         await ctx.message.add_reaction("✅")
+
+@bot.command()
+async def pet(ctx, name = None, animal = None):
+    global pets
+    if ctx.message.author in pets:
+        if pets[ctx.message.author] != None:
+            await ctx.send("You already have a pet!")
+            return
+    if not name or not animal:
+        await ctx.send("Invalid syntax. `!pet (name) (animal)`")
+        return
+    pets[ctx.message.author] = Pet(name, animal)
+    await pets.get(ctx.author).info(ctx)
+
+@bot.command()
+async def feed(ctx):
+    if ctx.message.author in pets:
+        if pets[ctx.message.author] != None:
+            pets[ctx.message.author].feed()
+        else:
+            await ctx.reply("You do not have a pet!")
+            return
+    else:
+        await ctx.reply("You do not have a pet!")
+        return
+
+@bot.command()
+async def info(ctx):
+    if ctx.message.author in pets:
+        if pets[ctx.message.author] != None:
+            await pets[ctx.message.author].info(ctx)
+        else:
+            await ctx.reply("You do not have a pet!")
+            return
+    else:
+        await ctx.reply("You do not have a pet!")
+        return
+
+@tasks.loop(seconds=30.0)
+async def depleteFood():
+    for i in range(len(list(pets.values()))):
+        pet = list(pets.values())[i]
+        if pet != None:
+            pet.food = max(0, pet.food - 1)
+            if pet.food == 0:
+                pet.health = max(0, pet.health - 1)
+            if pet.food == 100:
+                pet.health = min(100, pet.health + 5)
+            if pet.health == 0:
+                pet = None
+
+@tasks.loop(seconds=60.0)
+async def increaseAge():
+    for i in range(len(list(pets.values()))):
+        pet = list(pets.values())[i]
+        if pet != None:
+            pet.age += 1
 
 async def drawWinner():
     global jackpotEmbed
