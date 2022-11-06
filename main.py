@@ -13,7 +13,7 @@ TOKEN = os.getenv("DISCORD_TOKEN")
 INTENTS = discord.Intents.default()
 INTENTS.members = True
 
-bot = commands.AutoShardedBot(command_prefix=commands.when_mentioned_or("!"), owner_id=518124039714242562, intents=INTENTS)
+bot = commands.AutoShardedBot(command_prefix=commands.when_mentioned_or("!"), owner_id=os.getenv("DISCORD_ID"), intents=INTENTS)
 
 jackpotEmbed = None
 participants = {}
